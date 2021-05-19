@@ -158,6 +158,11 @@ namespace DataActivityService
                     {
                         GetControlValues();
                         controlSw.Restart();
+
+                        if (testControl.EnableValidationData)
+                        {
+                            SyncAthleteDataForValidation();
+                        }
                     }
 
                     if (testControl.AthleteInsertRatePerMin > 0)
@@ -219,6 +224,7 @@ namespace DataActivityService
             public Int32 StartEventCount { get; set; }
             public Int32 MaxEventCount { get; set; }
             public Int32 EventRatePerMin { get; set; }
+            public bool EnableValidationData { get; set; }
         }
 
         public bool GetControlValues()
@@ -236,6 +242,7 @@ select top 1 StartAthleteCount
     , StartEventCount
     , MaxEventCount
     , EventRatePerMin 
+    , EnableValidationData
 from testControl 
 order by LatestOffset desc ", this.centralConn))
             {
@@ -256,7 +263,8 @@ order by LatestOffset desc ", this.centralConn))
                             AthleteUpdateRatePerMin = reader.GetInt32(3),
                             StartEventCount = reader.GetInt32(4),
                             MaxEventCount = reader.GetInt32(5),
-                            EventRatePerMin = reader.GetInt32(6)
+                            EventRatePerMin = reader.GetInt32(6),
+                            EnableValidationData = reader.GetBoolean(7)
                         };
 
                         break;
@@ -395,7 +403,81 @@ order by LatestOffset desc ", this.centralConn))
             }
             return true;
         }
-        
+
+
+
+        public void TruncateAthleteDataForValidation()
+        {
+            if (this.eventConn.State != System.Data.ConnectionState.Open)
+            {
+                this.eventConn.Open();
+            }
+
+            using (var command = new SqlCommand(@"truncate table dbo.Athlete", this.eventConn))
+            {
+                command.ExecuteNonQuery();
+            }
+        }
+
+
+        private void SyncAthleteDataForValidation()
+        {
+
+            if (this.eventConn.State != System.Data.ConnectionState.Open)
+            {
+                this.eventConn.Open();
+            }
+
+            if (this.centralConn.State != System.Data.ConnectionState.Open)
+            {
+                this.centralConn.Open();
+            }
+
+            try
+            {
+
+                string sql = $"select AthleteId, Sport, recruitingClassYear from dbo.Athlete";
+
+                string destinationTableWithSchema = string.Format("[{0}].[{1}]", "dbo", "Athlete");
+
+                // get data from source table as SqlDataReader
+                SqlCommand commandSourceData = new SqlCommand(sql, this.centralConn);
+                commandSourceData.CommandTimeout = 300;
+                using (SqlDataReader reader = commandSourceData.ExecuteReader())
+                {
+                    using (SqlBulkCopy bulkCopy = new SqlBulkCopy(this.eventConn))
+                    {
+
+                        var totalRowsCopied = 0L;
+
+                        bulkCopy.DestinationTableName = destinationTableWithSchema;
+                        // when is true, SqlBulkCopy read from a IDataReader object using SequentialAccess,
+                        // optimizing memory usage instead of loads all the data returned into memory before
+                        // sending it to SQL Server
+                        bulkCopy.EnableStreaming = true;
+
+                        // number of seconds for the operation complete before it times out
+                        bulkCopy.BulkCopyTimeout = 360;
+                        // number of rows in each batch. At the end of each batch, the rows int the batch
+                        // are sent to the server
+                        bulkCopy.BatchSize = 1000;
+
+                        TruncateAthleteDataForValidation();
+
+                        bulkCopy.WriteToServer(reader);
+
+                    }
+                }
+
+            }
+
+            catch (Exception)
+            {
+                throw;
+            }
+
+        }
+
 
 
     }

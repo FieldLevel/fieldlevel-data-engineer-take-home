@@ -126,3 +126,14 @@ VALUES (
 
 return
 GO
+
+
+
+/*  this table is used for testing and validation of what the correct results should be  */
+CREATE TABLE [dbo].[Athlete](
+	athleteId int NOT NULL,
+    sport nvarchar(50) not null ,
+	recruitingClassYear smallint NULL,
+    PRIMARY KEY CLUSTERED (	[athleteId] ) WITH (DATA_COMPRESSION=PAGE)
+) 
+GO
