@@ -777,6 +777,7 @@ begin
         ,StartEventCount int not null 
         ,MaxEventCount int not null 
         ,EventRatePerMin int not null 
+		,EnableValidationData bit not null default(0)
         ,LatestOffset bigint not null PRIMARY KEY 
     ) 
 END 
